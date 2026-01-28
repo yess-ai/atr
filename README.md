@@ -37,6 +37,7 @@ pip install atr[anthropic]
 pip install atr[langgraph]
 pip install atr[agno]
 pip install atr[openai-agents]
+pip install atr[litellm]
 
 # Everything
 pip install atr[all]
@@ -73,7 +74,7 @@ print(filtered.names)  # {'get_stock_price'}
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from atr import ToolRouter
 from atr.adapters import LangChainAdapter
-from atr.integrations.langgraph import filter_tools
+from atr.adapters.langchain import filter_tools
 
 # Load MCP tools
 async with MultiServerMCPClient(server_configs) as client:
@@ -94,7 +95,7 @@ async with MultiServerMCPClient(server_configs) as client:
 Or use the high-level `LangGraphRouter`:
 
 ```python
-from atr.integrations.langgraph import LangGraphRouter
+from atr.adapters import LangGraphRouter
 
 router = LangGraphRouter(llm=OpenRouterLLM(), tools=all_tools)
 filtered = await router.aroute("Read the README")  # Returns LangChain tools
@@ -103,36 +104,83 @@ filtered = await router.aroute("Read the README")  # Returns LangChain tools
 ### Agno
 
 ```python
-from atr.integrations.agno import AgnoMCPRouter, create_filtered_agent_instructions
 from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from agno.tools.mcp import MCPTools
+from atr import ToolRouter
+from atr.adapters import AgnoAdapter
+from atr.llm import OpenRouterLLM
 
-# Create router with MCP servers
-router = AgnoMCPRouter(
-    servers={
-        "filesystem": {"command": "npx", "args": ["-y", "@anthropic/mcp-server-filesystem", "/tmp"]},
-    },
-    llm=OpenRouterLLM(),
-)
+async with MCPTools(command="npx", args=["-y", "@anthropic/mcp-server-filesystem", "/tmp"]) as mcp:
+    # Convert to specs and create router
+    specs = AgnoAdapter.to_specs(mcp.functions)
+    router = ToolRouter(llm=OpenRouterLLM(), max_tools=5)
+    router.add_tools(specs)
 
-async with router:
-    # Get filtered tool names
-    filtered_names = await router.route("Read a file")
+    # Route and filter
+    filtered = await router.aroute("List files")
+    filtered_funcs = AgnoAdapter.filter_tools(mcp.functions, filtered)
 
-    # Create agent with filtered tool hint
-    agent = Agent(
-        model=OpenAIChat(id="gpt-4o"),
-        tools=[router.mcp_tools],
-        instructions=create_filtered_agent_instructions(filtered_names),
-    )
+    # Create agent with filtered tools
+    agent = Agent(model=OpenAIChat(id="gpt-4o"), tools=filtered_funcs)
+```
+
+Or use the convenience helpers:
+
+```python
+from atr.adapters.agno import create_router, route_and_filter
+
+async with MCPTools(...) as mcp:
+    router = create_router(mcp, llm=OpenRouterLLM())
+    filtered_funcs = await route_and_filter(router, mcp, "List files")
 ```
 
 ### OpenAI Agents SDK
 
 ```python
-from atr.integrations.openai_agents import OpenAIAgentsRouter
+from atr.adapters import OpenAIRouter
 
-router = OpenAIAgentsRouter(llm=OpenRouterLLM(), tools=openai_tools)
+router = OpenAIRouter(llm=OpenRouterLLM(), tools=openai_tools)
 filtered = router.route("What's the weather?")  # Returns OpenAI tool definitions
+```
+
+### LiteLLM
+
+ATR integrates with LiteLLM as a custom hook for automatic tool routing:
+
+```python
+import litellm
+from atr.adapters.litellm import create_hook
+
+# Create and configure the hook
+hook = create_hook(
+    llm_provider="openrouter",
+    llm_model="anthropic/claude-3-haiku",
+    max_tools=5,
+)
+
+# Add to LiteLLM callbacks
+litellm.callbacks = [hook]
+
+# Tools are now automatically filtered before reaching the model
+response = await litellm.acompletion(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "What's the weather?"}],
+    tools=all_tools,  # ATR filters these automatically
+)
+```
+
+For LiteLLM proxy, configure in `proxy_config.yaml`:
+
+```yaml
+litellm_settings:
+  callbacks:
+    - atr.adapters.litellm.ATRToolRoutingHook
+  atr_config:
+    enabled: true
+    max_tools: 10
+    llm_provider: openrouter
+    llm_model: anthropic/claude-3-haiku
 ```
 
 ## API Reference
@@ -193,7 +241,7 @@ llm = AnthropicLLM(model="claude-3-haiku-20240307")
 ### Tool Adapters
 
 ```python
-from atr.adapters import MCPAdapter, LangChainAdapter, AgnoAdapter
+from atr.adapters import MCPAdapter, LangChainAdapter, AgnoAdapter, OpenAIAdapter, LiteLLMAdapter
 
 # MCP tools
 specs = MCPAdapter.to_specs(mcp_tools)
@@ -206,6 +254,14 @@ filtered_lc = LangChainAdapter.filter_tools(langchain_tools, filtered_collection
 # Agno functions
 specs = AgnoAdapter.to_specs(agno_functions)
 filtered_agno = AgnoAdapter.filter_tools(agno_functions, filtered_collection)
+
+# OpenAI function definitions
+specs = OpenAIAdapter.to_specs(openai_tools)
+filtered_openai = OpenAIAdapter.filter_tools(openai_tools, filtered_collection)
+
+# LiteLLM (same format as OpenAI)
+specs = LiteLLMAdapter.to_specs(litellm_tools)
+filtered_litellm = LiteLLMAdapter.filter_tools(litellm_tools, filtered_collection)
 ```
 
 ## Custom Filter Strategies
@@ -242,6 +298,7 @@ See the [examples/](examples/) directory for complete examples:
 - `langgraph_example.py` - LangGraph with MCP tools
 - `agno_example.py` - Agno with MCP and toolkits
 - `openai_agents_example.py` - OpenAI Agents SDK
+- `litellm_example.py` - LiteLLM with automatic hook-based routing
 
 ## Development
 

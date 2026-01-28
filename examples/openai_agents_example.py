@@ -1,26 +1,21 @@
 """
-OpenAI Agents SDK Integration Example
+OpenAI Integration Example
 
-This example demonstrates using ATR with the OpenAI Agents SDK.
+This example demonstrates using ATR with OpenAI-format tools.
 It shows how to:
 1. Convert OpenAI function definitions to ToolSpecs
 2. Route queries to filter relevant tools
-3. Use FilteredRunner for automatic routing
+3. Use OpenAIRouter for high-level integration
 
 Requirements:
-    pip install atr[openai-agents]
-    # Or: pip install openai-agents
+    pip install atr
 """
 
 import asyncio
 import os
 
 from atr import ToolRouter
-from atr.integrations.openai_agents import (
-    FilteredRunner,
-    OpenAIAgentsAdapter,
-    OpenAIAgentsRouter,
-)
+from atr.adapters.openai import OpenAIAdapter, OpenAIRouter
 from atr.llm import OpenRouterLLM
 
 
@@ -119,7 +114,7 @@ def manual_routing_example():
     tools = create_sample_tools()
 
     # Convert to ToolSpecs
-    specs = OpenAIAgentsAdapter.to_specs(tools)
+    specs = OpenAIAdapter.to_specs(tools)
     print(f"Converted {len(specs)} tools to ToolSpecs")
 
     # Create router
@@ -139,7 +134,7 @@ def manual_routing_example():
 
     for query in queries:
         filtered_specs = router.route(query)
-        filtered_tools = OpenAIAgentsAdapter.filter_tools(tools, filtered_specs)
+        filtered_tools = OpenAIAdapter.filter_tools(tools, filtered_specs)
 
         print(f"Query: {query}")
         print(f"Filtered tools: {[t['function']['name'] for t in filtered_tools]}\n")
@@ -147,14 +142,14 @@ def manual_routing_example():
 
 async def high_level_router_example():
     """
-    Example: Using OpenAIAgentsRouter for simpler integration.
+    Example: Using OpenAIRouter for simpler integration.
     """
     print("=== High-Level Router Example ===\n")
 
     tools = create_sample_tools()
 
     # Create high-level router
-    router = OpenAIAgentsRouter(
+    router = OpenAIRouter(
         llm=OpenRouterLLM(model="anthropic/claude-3-haiku"),
         tools=tools,
         max_tools=3,
@@ -173,49 +168,6 @@ async def high_level_router_example():
         print(f"Filtered tools: {[t['function']['name'] for t in filtered]}\n")
 
 
-async def filtered_runner_example():
-    """
-    Example: Using FilteredRunner with OpenAI Agents SDK.
-
-    Note: This example shows the pattern but requires openai-agents
-    to be installed and an actual agent to be created.
-    """
-    print("=== FilteredRunner Example ===\n")
-
-    tools = create_sample_tools()
-
-    # Create router
-    llm = OpenRouterLLM(model="anthropic/claude-3-haiku")
-    router = ToolRouter(llm=llm, max_tools=3)
-    router.add_tools(OpenAIAgentsAdapter.to_specs(tools))
-
-    # Note: In a real scenario, you would create an actual OpenAI Agent
-    # from openai_agents import Agent
-    # agent = Agent(
-    #     name="assistant",
-    #     instructions="You are a helpful assistant",
-    #     tools=tools,
-    # )
-    #
-    # # Create filtered runner
-    # runner = FilteredRunner(agent, router, tools)
-    #
-    # # Run with automatic routing
-    # result = await runner.run("What's the weather in NYC?")
-
-    print("FilteredRunner pattern:")
-    print("1. Create OpenAI Agent with all tools")
-    print("2. Create ToolRouter with tool specs")
-    print("3. Wrap with FilteredRunner")
-    print("4. Call runner.run(query) - routing happens automatically")
-
-    # Show what would be filtered
-    query = "What's the weather in NYC?"
-    filtered = router.route(query)
-    print(f"\nExample query: {query}")
-    print(f"Would filter to: {filtered.names}")
-
-
 async def main():
     """Run all examples."""
     if not os.environ.get("OPENROUTER_API_KEY"):
@@ -225,8 +177,6 @@ async def main():
     manual_routing_example()
     print("\n" + "=" * 50 + "\n")
     await high_level_router_example()
-    print("\n" + "=" * 50 + "\n")
-    await filtered_runner_example()
 
 
 if __name__ == "__main__":

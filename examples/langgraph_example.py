@@ -26,7 +26,7 @@ except ImportError:
 
 from atr import ToolRouter
 from atr.adapters import LangChainAdapter
-from atr.integrations.langgraph import LangGraphRouter, filter_tools
+from atr.adapters.langchain import LangGraphRouter, filter_tools
 from atr.llm import OpenRouterLLM
 
 

@@ -84,7 +84,7 @@ async def example_with_helpers():
         print("This example requires agno. Install with: pip install agno")
         return
 
-    from atr.integrations.agno import create_router, route_and_filter
+    from atr.adapters.agno import create_router, route_and_filter
     from atr.llm import OpenRouterLLM
 
     async with MCPTools(

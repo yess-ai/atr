@@ -26,9 +26,10 @@ Example:
     ```
 
 For framework-specific integrations, see:
-- `atr.integrations.langgraph` - LangGraph integration
-- `atr.integrations.agno` - Agno integration
-- `atr.integrations.openai_agents` - OpenAI Agents SDK integration
+- `atr.adapters.langchain` - LangChain/LangGraph integration
+- `atr.adapters.agno` - Agno integration
+- `atr.adapters.openai` - OpenAI Agents SDK integration
+- `atr.adapters.litellm` - LiteLLM integration
 """
 
 from atr.core.exceptions import (

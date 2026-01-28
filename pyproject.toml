@@ -57,6 +57,7 @@ agno = [
     "mcp>=1.0.0",
 ]
 openai-agents = ["openai-agents>=0.1.0"]
+litellm = ["litellm>=1.0.0"]
 
 # Development
 dev = [
@@ -68,7 +69,7 @@ dev = [
 
 # All optional dependencies
 all = [
-    "atr[openrouter,openai,anthropic,mcp,langchain,langgraph,agno,openai-agents]",
+    "atr[openrouter,openai,anthropic,mcp,langchain,langgraph,agno,openai-agents,litellm]",
 ]
 
 [project.urls]
