@@ -6,7 +6,7 @@ It shows how to:
 1. Load tools from MCP servers using langchain-mcp-adapters
 2. Convert them to ToolSpecs for routing
 3. Filter tools based on user query
-4. Use filtered tools with a LangGraph agent
+4. Create a LangGraph routing node
 
 Requirements:
     pip install atr[langgraph]
@@ -26,17 +26,16 @@ except ImportError:
 
 from atr import ToolRouter
 from atr.adapters import LangChainAdapter
-from atr.adapters.langchain import LangGraphRouter, filter_tools
+from atr.adapters.langchain import create_router_node, filter_tools
 from atr.llm import OpenRouterLLM
 
 
-async def basic_langgraph_example():
+async def basic_example():
     """
-    Basic example: Manual tool loading and filtering.
+    Basic example: Tool loading, routing, and filtering.
     """
     print("=== Basic LangGraph Example ===\n")
 
-    # Configure MCP servers
     server_configs = {
         "filesystem": {
             "transport": "stdio",
@@ -45,7 +44,6 @@ async def basic_langgraph_example():
         },
     }
 
-    # Load tools from MCP servers
     async with MultiServerMCPClient(server_configs) as client:
         all_tools = await client.get_tools()
         print(f"Loaded {len(all_tools)} tools from MCP servers")
@@ -55,59 +53,25 @@ async def basic_langgraph_example():
         router = ToolRouter(llm=llm, max_tools=5)
         router.add_tools(LangChainAdapter.to_specs(all_tools))
 
-        # Route query
-        query = "Read the contents of /tmp/test.txt"
-        filtered_specs = router.route(query)
-        print(f"\nQuery: {query}")
-        print(f"Filtered tool names: {filtered_specs.names}")
-
-        # Filter original LangChain tools
-        filtered_lc_tools = filter_tools(all_tools, filtered_specs)
-        print(f"Filtered LangChain tools: {[t.name for t in filtered_lc_tools]}")
-
-
-async def high_level_router_example():
-    """
-    High-level example: Using LangGraphRouter for simpler integration.
-    """
-    print("\n=== High-Level LangGraphRouter Example ===\n")
-
-    server_configs = {
-        "filesystem": {
-            "transport": "stdio",
-            "command": "npx",
-            "args": ["-y", "@anthropic/mcp-server-filesystem", "/tmp"],
-        },
-    }
-
-    async with MultiServerMCPClient(server_configs) as client:
-        all_tools = await client.get_tools()
-
-        # Create high-level router
-        router = LangGraphRouter(
-            llm=OpenRouterLLM(model="anthropic/claude-3-haiku"),
-            tools=all_tools,
-            max_tools=5,
-        )
-
-        # Route and get filtered LangChain tools directly
+        # Route queries
         queries = [
+            "Read the contents of /tmp/test.txt",
             "List files in /tmp",
             "Write 'hello' to /tmp/greeting.txt",
-            "Search for Python files",
         ]
 
         for query in queries:
-            filtered = await router.aroute(query)
+            filtered_specs = await router.aroute(query)
+            filtered_lc_tools = filter_tools(all_tools, filtered_specs)
             print(f"Query: {query}")
-            print(f"Filtered tools: {[t.name for t in filtered]}\n")
+            print(f"Filtered tools: {[t.name for t in filtered_lc_tools]}\n")
 
 
 async def langgraph_node_example():
     """
     Example: Creating a LangGraph node for dynamic routing.
     """
-    print("\n=== LangGraph Node Example ===\n")
+    print("=== LangGraph Node Example ===\n")
 
     try:
         from langgraph.graph import StateGraph
@@ -116,7 +80,6 @@ async def langgraph_node_example():
         print("This example requires langgraph. Install with: pip install langgraph")
         return
 
-    # Define state
     class AgentState(TypedDict):
         query: str
         tools: list[Any]
@@ -134,16 +97,12 @@ async def langgraph_node_example():
         all_tools = await client.get_tools()
 
         # Create router
-        router = LangGraphRouter(
-            llm=OpenRouterLLM(model="anthropic/claude-3-haiku"),
-            tools=all_tools,
-        )
+        llm = OpenRouterLLM(model="anthropic/claude-3-haiku")
+        router = ToolRouter(llm=llm, max_tools=5)
+        router.add_tools(LangChainAdapter.to_specs(all_tools))
 
         # Create routing node
-        routing_node = router.create_node(
-            state_key="tools",
-            query_key="query",
-        )
+        routing_node = create_router_node(router, all_tools)
 
         # Build graph
         graph = StateGraph(AgentState)
@@ -165,8 +124,8 @@ async def main():
         print("Set OPENROUTER_API_KEY environment variable to run this example")
         return
 
-    await basic_langgraph_example()
-    await high_level_router_example()
+    await basic_example()
+    print("\n" + "=" * 50 + "\n")
     await langgraph_node_example()
 
 

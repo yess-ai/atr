@@ -13,15 +13,11 @@ def __getattr__(name: str):
 
         return MCPAdapter
 
-    # LangChain / LangGraph
+    # LangChain
     elif name == "LangChainAdapter":
         from atr.adapters.langchain import LangChainAdapter
 
         return LangChainAdapter
-    elif name == "LangGraphRouter":
-        from atr.adapters.langchain import LangGraphRouter
-
-        return LangGraphRouter
 
     # Agno
     elif name == "AgnoAdapter":
@@ -34,10 +30,6 @@ def __getattr__(name: str):
         from atr.adapters.openai import OpenAIAdapter
 
         return OpenAIAdapter
-    elif name == "OpenAIRouter":
-        from atr.adapters.openai import OpenAIRouter
-
-        return OpenAIRouter
 
     # LiteLLM
     elif name == "LiteLLMAdapter":

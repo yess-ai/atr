@@ -120,6 +120,32 @@ class LiteLLMAdapter:
 # ========================================
 
 
+def filter_tools(
+    tools: list[dict[str, Any]], filtered: ToolCollection
+) -> list[dict[str, Any]]:
+    """
+    Filter LiteLLM tools by a ToolCollection.
+
+    Convenience function for filtering LiteLLM tools after routing.
+
+    Args:
+        tools: Original LiteLLM tool definitions.
+        filtered: ToolCollection containing the filtered specs.
+
+    Returns:
+        Filtered list of tool definitions.
+
+    Example:
+        ```python
+        from atr.adapters.litellm import filter_tools
+
+        filtered_specs = router.route("What's the weather?")
+        filtered_tools = filter_tools(all_tools, filtered_specs)
+        ```
+    """
+    return LiteLLMAdapter.filter_tools(tools, filtered)
+
+
 def extract_query_from_messages(messages: list[dict[str, Any]]) -> str | None:
     """
     Extract the user query from a list of messages.

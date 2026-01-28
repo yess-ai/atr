@@ -5,7 +5,6 @@ This example demonstrates using ATR with OpenAI-format tools.
 It shows how to:
 1. Convert OpenAI function definitions to ToolSpecs
 2. Route queries to filter relevant tools
-3. Use OpenAIRouter for high-level integration
 
 Requirements:
     pip install atr
@@ -15,7 +14,7 @@ import asyncio
 import os
 
 from atr import ToolRouter
-from atr.adapters.openai import OpenAIAdapter, OpenAIRouter
+from atr.adapters.openai import OpenAIAdapter, filter_tools
 from atr.llm import OpenRouterLLM
 
 
@@ -105,22 +104,22 @@ def create_sample_tools() -> list[dict]:
     ]
 
 
-def manual_routing_example():
-    """
-    Example: Manual tool conversion and routing.
-    """
-    print("=== Manual Routing Example ===\n")
+async def main():
+    """Run the example."""
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        print("Set OPENROUTER_API_KEY environment variable to run this example")
+        return
+
+    print("=== OpenAI Tools Routing Example ===\n")
 
     tools = create_sample_tools()
 
-    # Convert to ToolSpecs
-    specs = OpenAIAdapter.to_specs(tools)
-    print(f"Converted {len(specs)} tools to ToolSpecs")
-
-    # Create router
+    # Create router and add tools
     llm = OpenRouterLLM(model="anthropic/claude-3-haiku")
     router = ToolRouter(llm=llm, max_tools=3)
-    router.add_tools(specs)
+    router.add_tools(OpenAIAdapter.to_specs(tools))
+
+    print(f"Loaded {len(tools)} tools\n")
 
     # Test queries
     queries = [
@@ -130,53 +129,12 @@ def manual_routing_example():
         "Schedule a meeting for tomorrow",
     ]
 
-    from atr.core.tool import ToolCollection
-
     for query in queries:
-        filtered_specs = router.route(query)
-        filtered_tools = OpenAIAdapter.filter_tools(tools, filtered_specs)
+        filtered_specs = await router.aroute(query)
+        filtered_tools = filter_tools(tools, filtered_specs)
 
         print(f"Query: {query}")
         print(f"Filtered tools: {[t['function']['name'] for t in filtered_tools]}\n")
-
-
-async def high_level_router_example():
-    """
-    Example: Using OpenAIRouter for simpler integration.
-    """
-    print("=== High-Level Router Example ===\n")
-
-    tools = create_sample_tools()
-
-    # Create high-level router
-    router = OpenAIRouter(
-        llm=OpenRouterLLM(model="anthropic/claude-3-haiku"),
-        tools=tools,
-        max_tools=3,
-    )
-
-    # Route queries
-    queries = [
-        "What's the weather in San Francisco?",
-        "Find information about Python programming",
-        "Get Tesla's stock price",
-    ]
-
-    for query in queries:
-        filtered = await router.aroute(query)
-        print(f"Query: {query}")
-        print(f"Filtered tools: {[t['function']['name'] for t in filtered]}\n")
-
-
-async def main():
-    """Run all examples."""
-    if not os.environ.get("OPENROUTER_API_KEY"):
-        print("Set OPENROUTER_API_KEY environment variable to run this example")
-        return
-
-    manual_routing_example()
-    print("\n" + "=" * 50 + "\n")
-    await high_level_router_example()
 
 
 if __name__ == "__main__":

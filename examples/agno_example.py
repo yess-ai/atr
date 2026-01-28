@@ -15,12 +15,12 @@ import asyncio
 import os
 
 
-async def example_with_adapter():
+async def example_with_mcp():
     """
-    Recommended pattern: Use AgnoAdapter directly.
+    Example: Using ATR with Agno MCPTools.
     """
     print("=" * 60)
-    print("Example 1: Using AgnoAdapter (Recommended)")
+    print("Example 1: MCP Tools")
     print("=" * 60 + "\n")
 
     try:
@@ -32,7 +32,7 @@ async def example_with_adapter():
         return
 
     from atr import ToolRouter
-    from atr.adapters import AgnoAdapter
+    from atr.adapters.agno import AgnoAdapter, filter_tools
     from atr.llm import OpenRouterLLM
 
     async with MCPTools(
@@ -44,62 +44,18 @@ async def example_with_adapter():
         print(f"Discovered {len(all_funcs)} tools: {[f.name for f in all_funcs]}")
 
         # Convert to specs and create router
-        specs = AgnoAdapter.to_specs(all_funcs)
         router = ToolRouter(llm=OpenRouterLLM(), max_tools=5)
-        router.add_tools(specs)
+        router.add_tools(AgnoAdapter.to_specs(all_funcs))
 
         # Route query
         query = "List all files in /tmp"
-        filtered = await router.aroute(query)
+        filtered_specs = await router.aroute(query)
         print(f"\nQuery: '{query}'")
-        print(f"ATR selected: {filtered.names}")
+        print(f"ATR selected: {filtered_specs.names}")
 
         # Filter functions and create agent
-        filtered_funcs = AgnoAdapter.filter_tools(all_funcs, filtered)
+        filtered_funcs = filter_tools(all_funcs, filtered_specs)
         print(f"Agent receives {len(filtered_funcs)} tools (not {len(all_funcs)})\n")
-
-        agent = Agent(
-            model=OpenAIChat(id="gpt-4o-mini"),
-            tools=filtered_funcs,
-            markdown=True,
-        )
-
-        response = await agent.arun(query)
-        print(response.content)
-
-
-async def example_with_helpers():
-    """
-    Alternative: Use convenience helpers from integrations.
-    """
-    print("\n" + "=" * 60)
-    print("Example 2: Using Integration Helpers")
-    print("=" * 60 + "\n")
-
-    try:
-        from agno.agent import Agent
-        from agno.models.openai import OpenAIChat
-        from agno.tools.mcp import MCPTools
-    except ImportError:
-        print("This example requires agno. Install with: pip install agno")
-        return
-
-    from atr.adapters.agno import create_router, route_and_filter
-    from atr.llm import OpenRouterLLM
-
-    async with MCPTools(
-        command="npx",
-        args=["-y", "@anthropic/mcp-server-filesystem", "/tmp"],
-    ) as mcp:
-        # Create router directly from MCPTools
-        router = create_router(mcp, llm=OpenRouterLLM(), max_tools=5)
-
-        # Route and filter in one call
-        query = "Read a file"
-        filtered_funcs = await route_and_filter(router, mcp, query)
-
-        print(f"Query: '{query}'")
-        print(f"Filtered to {len(filtered_funcs)} tools: {[f.name for f in filtered_funcs]}\n")
 
         agent = Agent(
             model=OpenAIChat(id="gpt-4o-mini"),
@@ -113,10 +69,10 @@ async def example_with_helpers():
 
 async def example_with_toolkit():
     """
-    Example with Agno toolkit (no MCP).
+    Example: Using ATR with Agno toolkit (no MCP).
     """
     print("\n" + "=" * 60)
-    print("Example 3: YFinance Toolkit")
+    print("Example 2: YFinance Toolkit")
     print("=" * 60 + "\n")
 
     try:
@@ -128,7 +84,7 @@ async def example_with_toolkit():
         return
 
     from atr import ToolRouter
-    from atr.adapters import AgnoAdapter
+    from atr.adapters.agno import AgnoAdapter, filter_tools
     from atr.llm import OpenRouterLLM
 
     # Create toolkit
@@ -146,9 +102,8 @@ async def example_with_toolkit():
     print(f"Toolkit has {len(all_funcs)} tools")
 
     # Create router
-    specs = AgnoAdapter.to_specs(all_funcs)
     router = ToolRouter(llm=OpenRouterLLM(), max_tools=3)
-    router.add_tools(specs)
+    router.add_tools(AgnoAdapter.to_specs(all_funcs))
 
     # Test queries
     queries = [
@@ -158,8 +113,8 @@ async def example_with_toolkit():
     ]
 
     for query in queries:
-        filtered = await router.aroute(query)
-        filtered_funcs = AgnoAdapter.filter_tools(all_funcs, filtered)
+        filtered_specs = await router.aroute(query)
+        filtered_funcs = filter_tools(all_funcs, filtered_specs)
         print(f"'{query}' -> {[f.name for f in filtered_funcs]}")
 
 
@@ -173,19 +128,14 @@ async def main():
         return
 
     try:
-        await example_with_adapter()
+        await example_with_mcp()
     except Exception as e:
         print(f"Example 1 failed: {e}")
 
     try:
-        await example_with_helpers()
-    except Exception as e:
-        print(f"Example 2 failed: {e}")
-
-    try:
         await example_with_toolkit()
     except Exception as e:
-        print(f"Example 3 failed: {e}")
+        print(f"Example 2 failed: {e}")
 
 
 if __name__ == "__main__":
