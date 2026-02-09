@@ -219,7 +219,7 @@ def create_router_node(
     return route_node
 
 
-async def create_async_router_node(
+def create_async_router_node(
     router: ToolRouter,
     tools: Sequence[Any],
     state_key: str = "tools",

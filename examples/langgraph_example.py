@@ -103,7 +103,7 @@ async def langgraph_node_example():
     router.add_tools(LangChainAdapter.to_specs(all_tools))
 
     # Create async routing node
-    routing_node = await create_async_router_node(router, all_tools)
+    routing_node = create_async_router_node(router, all_tools)
 
     # Build graph
     graph = StateGraph(AgentState)

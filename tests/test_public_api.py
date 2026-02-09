@@ -148,11 +148,18 @@ class TestAllExports:
         assert "ToolSpec" in atr.__all__
         assert "ToolCollection" in atr.__all__
 
+    def test_all_contains_version(self):
+        """__all__ includes __version__."""
+        import atr
+
+        assert "__version__" in atr.__all__
+
     def test_all_contains_strategies(self):
         """__all__ includes strategy classes."""
         import atr
 
         assert "FilterStrategy" in atr.__all__
+        assert "BaseFilterStrategy" in atr.__all__
         assert "LLMFilterStrategy" in atr.__all__
         assert "PassthroughStrategy" in atr.__all__
 
@@ -164,3 +171,4 @@ class TestAllExports:
         assert "RoutingError" in atr.__all__
         assert "LLMError" in atr.__all__
         assert "AdapterError" in atr.__all__
+        assert "ConfigurationError" in atr.__all__
