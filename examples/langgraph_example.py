@@ -315,6 +315,137 @@ async def agent_with_routing_graph_example():
     print(f"\nAgent Response:\n{last_message.content}")
 
 
+async def chat_simulation_example():
+    """
+    Iterative queries: re-route tools on each new user message.
+
+    Demonstrates a conversational agent where each follow-up query triggers
+    the router node again, selecting a *different* set of tools based on the
+    new task — while preserving the full conversation history.
+
+    Flow per query:
+        route_tools ➜ agent ⟷ tools (loop until done) ➜ END
+
+    Requirements:
+        pip install atr[langgraph] langchain-openai
+    """
+    print("=== Chat Simulation with Re-Routing ===\n")
+
+    try:
+        from typing import Annotated, Any, TypedDict
+
+        from langchain_core.messages import AnyMessage, HumanMessage
+        from langchain_openai import ChatOpenAI
+        from langgraph.graph import END, StateGraph
+        from langgraph.graph.message import add_messages
+        from langgraph.prebuilt import ToolNode
+    except ImportError:
+        print("This example requires langgraph and langchain-openai.")
+        print("Install with: pip install langgraph langchain-openai")
+        return
+
+    # --- State ---
+    class AgentState(TypedDict):
+        messages: Annotated[list[AnyMessage], add_messages]
+        tools: list[Any]
+        query: str
+
+    # --- MCP servers: filesystem + fetch give us two distinct tool domains ---
+    server_configs = {
+        "filesystem": {
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/private/tmp"],
+        },
+        "fetch": {
+            "transport": "stdio",
+            "command": "uvx",
+            "args": ["mcp-server-fetch"],
+        },
+    }
+
+    client = MultiServerMCPClient(server_configs)
+    all_tools = await client.get_tools()
+    print(f"Total tools loaded: {len(all_tools)}")
+    print(f"All tools: {[t.name for t in all_tools]}\n")
+
+    # --- Router + Agent LLM ---
+    routing_llm = OpenAILLM(model="gpt-4o-mini")
+    router = ToolRouter(llm=routing_llm, max_tools=5)
+    router.add_tools(LangChainAdapter.to_specs(all_tools))
+
+    agent_llm = ChatOpenAI(model="gpt-4o")
+
+    # --- Nodes ---
+    async def route_tools_node(state: AgentState) -> dict:
+        query = state["query"]
+        filtered_specs = await router.aroute(query)
+        filtered = filter_tools(all_tools, filtered_specs)
+        print(
+            f"  Router selected {len(filtered)}/{len(all_tools)} tools: {[t.name for t in filtered]}"
+        )
+        return {"tools": filtered}
+
+    async def call_model_node(state: AgentState) -> dict:
+        tools = state.get("tools", all_tools)
+        response = await agent_llm.bind_tools(tools).ainvoke(state["messages"])
+        return {"messages": [response]}
+
+    async def tool_executor_node(state: AgentState) -> dict:
+        tools = state.get("tools", all_tools)
+        return await ToolNode(tools).ainvoke(state)
+
+    def should_continue(state: AgentState) -> str:
+        last = state["messages"][-1]
+        if hasattr(last, "tool_calls") and last.tool_calls:
+            return "tools"
+        return "end"
+
+    # --- Build graph ---
+    graph = StateGraph(AgentState)
+    graph.add_node("route_tools", route_tools_node)
+    graph.add_node("agent", call_model_node)
+    graph.add_node("tools", tool_executor_node)
+
+    graph.set_entry_point("route_tools")
+    graph.add_edge("route_tools", "agent")
+    graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
+    graph.add_edge("tools", "agent")
+
+    app = graph.compile()
+
+    # --- Simulate an iterative conversation ---
+    # Each query is a new invocation that starts at route_tools, but we carry
+    # the full message history forward so the agent has conversational context.
+
+    queries = [
+        "List all files in /private/tmp",
+        "Now fetch the content from https://httpbin.org/json and summarize it",
+    ]
+
+    messages: list[AnyMessage] = []
+
+    for i, query in enumerate(queries, 1):
+        print(f"{'=' * 60}")
+        print(f"Turn {i} — User: {query}\n")
+
+        messages.append(HumanMessage(content=query))
+
+        result = await app.ainvoke(
+            {
+                "query": query,  # router uses this to pick tools
+                "messages": messages,  # full conversation so far
+                "tools": [],
+            }
+        )
+
+        # Capture all new messages (LLM + tool results) for the next turn
+        messages = result["messages"]
+
+        last_message = messages[-1]
+        print(f"\n  Agent response:\n  {last_message.content}\n")
+
+
 async def main():
     """Run all examples."""
     if not os.environ.get("OPENAI_API_KEY"):
@@ -328,6 +459,8 @@ async def main():
     await agent_with_routing_example()
     print("\n" + "=" * 50 + "\n")
     await agent_with_routing_graph_example()
+    print("\n" + "=" * 50 + "\n")
+    await chat_simulation_example()
 
 
 if __name__ == "__main__":
