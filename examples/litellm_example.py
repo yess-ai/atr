@@ -1,21 +1,20 @@
 """
 LiteLLM Integration Example
 
-This example demonstrates using ATR with LiteLLM as a custom hook
-for automatic tool routing.
+This example demonstrates using ATR as a LiteLLM callback hook that
+transparently filters tools before they reach the model.
 
-It shows how to:
-1. Create and configure the ATR hook programmatically
-2. Add the hook to LiteLLM callbacks
-3. Use with the LiteLLM proxy (config example)
+Unlike agent frameworks, LiteLLM is an LLM gateway — ATR plugs into its
+callback system to intercept and prune tools on every completion call.
+This is useful when you're using LiteLLM as your LLM layer (directly or
+via the proxy) and want automatic tool routing without changing call sites.
 
 Requirements:
     pip install atr[litellm]
-    # Or: pip install litellm
 
 Environment variables:
-    OPENROUTER_API_KEY - Required for routing (uses OpenRouter by default)
-    OPENAI_API_KEY - Or use OpenAI for routing (set llm_provider="openai")
+    OPENROUTER_API_KEY - Required for the routing LLM
+    OPENAI_API_KEY     - Required for the main LLM call (via LiteLLM)
 """
 
 import asyncio
@@ -23,7 +22,7 @@ import os
 
 
 def create_sample_tools() -> list[dict]:
-    """Create sample tools in OpenAI format (used by LiteLLM)."""
+    """Create a bunch of tools in OpenAI format — enough to trigger routing."""
     return [
         {
             "type": "function",
@@ -35,7 +34,7 @@ def create_sample_tools() -> list[dict]:
                     "properties": {
                         "location": {
                             "type": "string",
-                            "description": "The city and state, e.g., San Francisco, CA",
+                            "description": "City and state, e.g. San Francisco, CA",
                         },
                     },
                     "required": ["location"],
@@ -50,10 +49,7 @@ def create_sample_tools() -> list[dict]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query",
-                        },
+                        "query": {"type": "string", "description": "Search query"},
                     },
                     "required": ["query"],
                 },
@@ -67,9 +63,9 @@ def create_sample_tools() -> list[dict]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "to": {"type": "string", "description": "Email recipient"},
-                        "subject": {"type": "string", "description": "Email subject"},
-                        "body": {"type": "string", "description": "Email body"},
+                        "to": {"type": "string", "description": "Recipient email"},
+                        "subject": {"type": "string"},
+                        "body": {"type": "string"},
                     },
                     "required": ["to", "subject", "body"],
                 },
@@ -83,7 +79,7 @@ def create_sample_tools() -> list[dict]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "symbol": {"type": "string", "description": "Stock ticker symbol"},
+                        "symbol": {"type": "string", "description": "Ticker symbol"},
                     },
                     "required": ["symbol"],
                 },
@@ -122,81 +118,69 @@ def create_sample_tools() -> list[dict]:
     ]
 
 
-async def programmatic_example():
+async def hook_example():
     """
-    Example: Using ATR hook programmatically with LiteLLM.
+    End-to-end example: ATR hook filters tools transparently on a real
+    litellm.acompletion() call.
 
-    This shows how to add the ATR hook to filter tools before
-    they are sent to the model.
+    The hook intercepts the request, routes the tools based on the user
+    query, and only sends the relevant subset to the model.
     """
-    print("=== Programmatic LiteLLM Hook Example ===\n")
+    print("=== LiteLLM + ATR Hook Example ===\n")
 
     try:
         import litellm
     except ImportError:
-        print("Please install litellm: pip install litellm")
+        print("Install litellm first: pip install litellm")
         return
 
     from atr.adapters.litellm import create_hook
 
-    # Create hook with custom configuration
+    # 1. Create ATR hook
     hook = create_hook(
         llm_provider="openrouter",
         llm_model="anthropic/claude-3-haiku",
         max_tools=3,
-        min_tools_threshold=4,  # Only route if 4+ tools
+        min_tools_threshold=4,  # Only route when 4+ tools present
     )
 
-    # Add to LiteLLM callbacks
+    # 2. Register hook — LiteLLM will call it on every completion
     litellm.callbacks = [hook]
 
-    print("Hook configured with:")
-    print(f"  - Provider: {hook.llm_provider}")
-    print(f"  - Model: {hook.llm_model}")
-    print(f"  - Max tools: {hook.max_tools}")
-    print(f"  - Min threshold: {hook.min_tools_threshold}")
-    print()
-
-    # Simulate what the hook does
     tools = create_sample_tools()
-    print(f"Original tools ({len(tools)}):")
-    for t in tools:
-        print(f"  - {t['function']['name']}")
-    print()
+    print(f"Registered {len(tools)} tools")
+    print(f"Tool names: {[t['function']['name'] for t in tools]}\n")
 
-    # The hook's async_pre_call_hook method is called by LiteLLM
-    # Let's simulate its behavior
-    data = {
-        "messages": [{"role": "user", "content": "What is the weather in NYC?"}],
-        "tools": tools,
-    }
+    # 3. Make a normal litellm call — ATR filters tools automatically
+    queries = [
+        "What's the weather like in Tokyo?",
+        "Send an email to bob@example.com about the meeting tomorrow",
+    ]
 
-    print(f"Query: {data['messages'][0]['content']}")
-    print("Routing...")
+    for query in queries:
+        print(f"Query: {query}")
 
-    # Call the hook's pre_call_hook method
-    result = await hook.async_pre_call_hook(
-        user_api_key_dict={},
-        cache=None,
-        data=data,
-        call_type="completion",
-    )
+        response = await litellm.acompletion(
+            model="openai/gpt-4o-mini",
+            messages=[{"role": "user", "content": query}],
+            tools=tools,  # Pass all tools — ATR prunes before they hit the model
+        )
 
-    print(f"\nFiltered tools ({len(result['tools'])}):")
-    for t in result["tools"]:
-        print(f"  - {t['function']['name']}")
+        msg = response.choices[0].message
+        if msg.tool_calls:
+            for tc in msg.tool_calls:
+                print(f"  Tool call: {tc.function.name}({tc.function.arguments})")
+        else:
+            print(f"  Response: {msg.content[:120]}")
+        print()
 
 
 def show_proxy_config():
-    """
-    Show example LiteLLM proxy configuration.
-    """
-    print("\n=== LiteLLM Proxy Configuration Example ===\n")
-
-    config = """
+    """Print example LiteLLM proxy YAML config using ATR as a hook."""
+    print("=== LiteLLM Proxy Config ===\n")
+    print(
+        """\
 # proxy_config.yaml
-# Configure ATR as a custom hook for the LiteLLM proxy
-
 model_list:
   - model_name: gpt-4
     litellm_params:
@@ -204,44 +188,38 @@ model_list:
       api_key: os.environ/OPENAI_API_KEY
 
 litellm_settings:
-  # Add ATR hook to callbacks
   callbacks:
     - atr.adapters.litellm.ATRToolRoutingHook
-
-  # ATR configuration
   atr_config:
     enabled: true
     max_tools: 10
     min_tools_threshold: 5
-    llm_provider: openrouter  # or: openai, anthropic
+    llm_provider: openrouter
     llm_model: anthropic/claude-3-haiku
 
-# Environment variables needed:
-# OPENROUTER_API_KEY - For routing LLM calls
-# OPENAI_API_KEY - For the main model (if using OpenAI)
+# Start: litellm --config proxy_config.yaml
+# Then any client sending tools will get automatic ATR filtering.
 """
-    print(config)
-
-    print("To start the proxy with this config:")
-    print("  litellm --config proxy_config.yaml")
-    print()
-    print("Then make requests to the proxy:")
-    print('  curl http://localhost:4000/chat/completions \\')
-    print('    -H "Content-Type: application/json" \\')
-    print('    -d \'{"model": "gpt-4", "messages": [...], "tools": [...]}\'')
+    )
 
 
 async def main():
-    """Run all examples."""
-    if not os.environ.get("OPENROUTER_API_KEY"):
-        print("Note: Set OPENROUTER_API_KEY to run the programmatic example")
-        print("      (showing config example instead)\n")
-        show_proxy_config()
-        return
+    has_router_key = bool(os.environ.get("OPENROUTER_API_KEY"))
+    has_openai_key = bool(os.environ.get("OPENAI_API_KEY"))
 
-    await programmatic_example()
-    print("\n" + "=" * 50)
-    show_proxy_config()
+    if has_router_key and has_openai_key:
+        await hook_example()
+        print("=" * 50 + "\n")
+        show_proxy_config()
+    elif has_router_key:
+        print("Set OPENAI_API_KEY to run the end-to-end hook example.\n")
+        show_proxy_config()
+    else:
+        print(
+            "Set OPENROUTER_API_KEY (for routing) and OPENAI_API_KEY "
+            "(for the LLM call) to run the end-to-end example.\n"
+        )
+        show_proxy_config()
 
 
 if __name__ == "__main__":

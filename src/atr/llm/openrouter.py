@@ -128,8 +128,14 @@ class OpenRouterLLM:
                 model=self.model,
                 messages=messages,
             )
+            if not response.choices:
+                raise LLMError(
+                    f"OpenRouter returned no choices. Response: {response}"
+                )
             content = response.choices[0].message.content
             return content if content else ""
+        except LLMError:
+            raise
         except Exception as e:
             raise LLMError(f"OpenRouter completion failed: {e}") from e
 
@@ -156,7 +162,13 @@ class OpenRouterLLM:
                 model=self.model,
                 messages=messages,
             )
+            if not response.choices:
+                raise LLMError(
+                    f"OpenRouter returned no choices. Response: {response}"
+                )
             content = response.choices[0].message.content
             return content if content else ""
+        except LLMError:
+            raise
         except Exception as e:
             raise LLMError(f"OpenRouter completion failed: {e}") from e
