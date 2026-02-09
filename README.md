@@ -1,6 +1,6 @@
 # ATR - Adaptive Tool Routing
 
-[![PyPI version](https://badge.fury.io/py/atr.svg)](https://badge.fury.io/py/atr)
+[![PyPI version](https://badge.fury.io/py/adaptive-tools.svg)](https://badge.fury.io/py/adaptive-tools)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
@@ -39,21 +39,21 @@ User Query ──> ATR Router ──> Lightweight LLM ──> Filtered Tool List
 
 ```bash
 # Core package (zero dependencies)
-pip install atr
+pip install adaptive-tools
 
 # With LLM provider
-pip install atr[openrouter]  # Recommended - access to many models
-pip install atr[openai]
-pip install atr[anthropic]
+pip install adaptive-tools[openrouter]  # Recommended - access to many models
+pip install adaptive-tools[openai]
+pip install adaptive-tools[anthropic]
 
 # With framework integration
-pip install atr[langgraph]
-pip install atr[agno]
-pip install atr[openai-agents]
-pip install atr[litellm]
+pip install adaptive-tools[langgraph]
+pip install adaptive-tools[agno]
+pip install adaptive-tools[openai-agents]
+pip install adaptive-tools[litellm]
 
 # Everything
-pip install atr[all]
+pip install adaptive-tools[all]
 ```
 
 ## Quick Start
