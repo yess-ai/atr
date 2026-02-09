@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "atr"
+name = "adaptive-tools"
 version = "0.1.0"
 description = "Adaptive Tool Routing - Dynamic tool selection for AI agents"
 readme = "README.md"
@@ -70,7 +70,7 @@ dev = [
 
 # All optional dependencies
 all = [
-    "atr[openrouter,openai,anthropic,mcp,langchain,langgraph,agno,openai-agents,litellm]",
+    "adaptive-tools[openrouter,openai,anthropic,mcp,langchain,langgraph,agno,openai-agents,litellm]",
 ]
 
 [project.urls]
