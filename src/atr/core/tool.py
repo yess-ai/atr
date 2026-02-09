@@ -26,7 +26,7 @@ class ToolSpec:
     description: str
     parameters: dict[str, Any] | None = None
     source: str | None = None
-    metadata: dict[str, Any] | None = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __hash__(self) -> int:
         return hash(self.name)

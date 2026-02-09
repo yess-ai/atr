@@ -1,8 +1,8 @@
 """Tool adapters for converting framework tools to ToolSpec."""
 
-from atr.adapters.base import ToolAdapter, get_tool_name
+from atr.adapters.base import ToolAdapter
 
-__all__ = ["ToolAdapter", "get_tool_name"]
+__all__ = ["ToolAdapter"]
 
 
 # Lazy imports for optional dependencies

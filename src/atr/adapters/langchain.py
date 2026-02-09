@@ -136,11 +136,6 @@ class LangChainAdapter:
         return result
 
 
-# ========================================
-# SECTION 2: CONVENIENCE FUNCTIONS
-# ========================================
-
-
 def filter_tools(tools: Sequence[Any], filtered: ToolCollection) -> list[Any]:
     """
     Filter LangChain tools by a ToolCollection.
