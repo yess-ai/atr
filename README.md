@@ -4,6 +4,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
+> 📖 Read the full blog post: [Adaptive Tool Routing: Solving Tool Overload in the MCP Era](https://www.yess.ai/post/adaptive-tool-routing)
+
 **Dynamic tool selection for AI agents.** ATR filters tools based on user queries before they reach the agent's system prompt, reducing context tokens by ~90% and improving tool selection accuracy.
 
 ## The Problem
